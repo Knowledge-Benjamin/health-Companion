@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Send, FileText, ChevronRight, Sparkles, Activity } from "lucide-react";
+import { Send, FileText, ChevronRight, Sparkles, Activity, Zap } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import Markdown from "react-markdown";
 import { GoogleGenAI } from "@google/genai";
@@ -10,15 +10,100 @@ type Message = {
   role: "user" | "oracle";
   text: string;
   sources?: string[];
+  toolCall?: {
+    name: string;
+    args: any;
+    result: any;
+  };
 };
 
 const SUGGESTIONS = [
   "What do my latest cholesterol results mean?",
   "How is my sleep affecting my heart rate?",
-  "Is my blood pressure medication working?",
+  "Book an appointment with Dr. Silberman",
+  "Message my emergency contact",
 ];
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
+const AGENT_TOOLS = [{
+  functionDeclarations: [
+    {
+      name: "bookAppointment",
+      description: "Books a medical appointment with a specified doctor or specialist.",
+      parameters: {
+        type: "object",
+        properties: {
+          specialistType: { type: "string" },
+          date: { type: "string", description: "YYYY-MM-DD format" },
+          time: { type: "string", description: "HH:MM format" }
+        },
+        required: ["specialistType", "date", "time"]
+      }
+    },
+    {
+      name: "sendWhatsAppMessage",
+      description: "Prepares a WhatsApp message to be sent to a specific phone number. This generates a wa.me link.",
+      parameters: {
+        type: "object",
+        properties: {
+          phoneNumber: { type: "string", description: "The full phone number including country code without any special characters or leading plus (e.g. 14155552671)." },
+          message: { type: "string", description: "The content of the WhatsApp message." }
+        },
+        required: ["phoneNumber", "message"]
+      }
+    },
+    {
+      name: "messageEmergencyContact",
+      description: "Sends an urgent SMS message to the user's registered emergency contact.",
+      parameters: {
+        type: "object",
+        properties: {
+          message: { type: "string" },
+          urgencyLevel: { type: "string", enum: ["low", "medium", "high", "critical"] }
+        },
+        required: ["message", "urgencyLevel"]
+      }
+    },
+    {
+      name: "makePhoneCall",
+      description: "Initiates an automated voice phone call to a service or contact on behalf of the user.",
+      parameters: {
+        type: "object",
+        properties: {
+          recipient: { type: "string", description: "Name or role of who to call (e.g., 'primary care physician', 'pharmacy', 'ambulance')" },
+          context: { type: "string", description: "What the AI should say on the call" }
+        },
+        required: ["recipient", "context"]
+      }
+    },
+    {
+       name: "refillPrescription",
+       description: "Requests a prescription refill from the registered pharmacy.",
+       parameters: {
+         type: "object",
+         properties: {
+            medicationName: { type: "string" },
+            pharmacyName: { type: "string" }
+         },
+         required: ["medicationName"]
+       }
+    },
+    {
+       name: "logHealthMetric",
+       description: "Logs a health metric into the local database.",
+       parameters: {
+         type: "object",
+         properties: {
+            metricName: { type: "string" },
+            value: { type: "number" },
+            unit: { type: "string" }
+         },
+         required: ["metricName", "value"]
+       }
+    }
+  ]
+}];
 
 export function Chat() {
   const [messages, setMessages] = useState<Message[]>(() => {
@@ -59,29 +144,90 @@ export function Chat() {
     setIsTyping(true);
 
     try {
-      // Map existing messages to GenAI contents format
-      const contents = newMessages.map(msg => ({
+      // Create a clean conversation format for Gemini
+      const contents: any[] = newMessages.map(msg => ({
         role: msg.role === "oracle" ? "model" : "user",
-        parts: [{ text: msg.text }]
+        parts: [{ text: msg.text + (msg.toolCall ? `\n[System Log: Action taken - ${msg.toolCall.name} with result: ${JSON.stringify(msg.toolCall.result)}]` : "") }]
       }));
 
-      const response = await ai.models.generateContent({
+      const config = {
+          systemInstruction: "You are Sentinel, a highly intelligent personal health partner with agentic capabilities. You bridge the gap between complex medical data and the user's everyday life. You have the ability to make phone calls, book appointments, log health metrics, refill prescriptions, and send WhatsApp messages. When an emergency SOS is triggered, you MUST simultaneously dispatch a phone call (using `makePhoneCall`) and prepare a WhatsApp message (using `sendWhatsAppMessage` with a placeholder number like 14155552671) containing critical medical context and location data. If a user asks you to take an action, use the appropriate tool. Always explain what you did clearly, but remain human and empathetic.",
+      };
+
+      let response = await ai.models.generateContent({
         model: "gemini-3.1-pro-preview",
         contents,
-        config: {
-          systemInstruction: "You are Sentinel, a highly intelligent but extremely friendly personal health partner. You must be medically accurate, but NEVER robotic or overly clinical. You bridge the gap between complex medical data and the user's everyday life. Explain medical terminologies in simple, empowering, and easy-to-understand ways. Act as a supportive, empathetic companion who helps users understand their own health.",
-        }
+        tools: AGENT_TOOLS,
+        config
       });
 
-      const responseText = response.text || "I'm having trouble thinking right now. Could you please try again?";
+      let numLoops = 0;
+      let intermediateMessages: Message[] = [];
+
+      while (response.functionCalls && response.functionCalls.length > 0 && numLoops < 5) {
+         const call = response.functionCalls[0];
+         
+         const argsStr = JSON.stringify(call.args);
+         console.log(`Executing tool: ${call.name} with args ${argsStr}`);
+
+         // We simulate action execution locally
+         let resultObj: any = { success: true, timestamp: new Date().toISOString(), message: "Action completed successfully" };
+         
+         if (call.name === "makePhoneCall") {
+             resultObj.message = `Automated call dispatched to ${call.args.recipient}`;
+             resultObj.transcript = "The AI successfully conveyed the message on the line.";
+         } else if (call.name === "bookAppointment") {
+             resultObj.message = `Appointment confirmed on ${call.args.date} at ${call.args.time}.`;
+             resultObj.referenceId = "APT-" + Math.floor(Math.random() * 10000);
+         } else if (call.name === "sendWhatsAppMessage") {
+             const url = `https://wa.me/${call.args.phoneNumber}?text=${encodeURIComponent(call.args.message)}`;
+             resultObj.message = "WhatsApp integration generated the link.";
+             resultObj.link = url;
+         }
+
+         const intermediateMsg: Message = {
+            id: (Date.now() + Math.random()).toString(),
+            role: "oracle",
+            text: `Initiated action: ${call.name}...`,
+            toolCall: { name: call.name, args: call.args, result: resultObj }
+         };
+         intermediateMessages.push(intermediateMsg);
+
+         // Add the model's tool call back to history
+         // In SDK, we must append the `functionResponse` properly if we used structured history.
+         // However, we are manually looping and it is often easier to provide the `functionResponse` part natively.
+         const mContent = response.candidates && response.candidates[0] && response.candidates[0].content;
+         if (mContent) contents.push(mContent);
+         
+         contents.push({
+            role: "user",
+            parts: [{
+               functionResponse: {
+                  name: call.name,
+                  response: resultObj
+               }
+            }]
+         });
+
+         response = await ai.models.generateContent({
+            model: "gemini-3.1-pro-preview",
+            contents,
+            tools: AGENT_TOOLS,
+            config
+         });
+         
+         numLoops++;
+      }
+
+      const responseText = response.text || "I've processed your request.";
       
-      const oracleMessage: Message = {
+      const finalOracleMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "oracle",
         text: responseText,
       };
       
-      setMessages(prev => [...prev, oracleMessage]);
+      setMessages(prev => [...prev, ...intermediateMessages, finalOracleMessage]);
     } catch (error) {
       console.error("AI Error:", error);
       const errorMessage: Message = {
@@ -129,6 +275,31 @@ export function Chat() {
                 {msg.role === "oracle" ? (
                    <div className="markdown-body prose prose-invert max-w-none prose-p:leading-relaxed prose-pre:bg-[#0A0A0B] prose-pre:border prose-pre:border-panel-border prose-a:text-oxygen-light prose-strong:text-white">
                       <Markdown>{msg.text}</Markdown>
+                      
+                      {msg.toolCall && (
+                        <div className="mt-3 p-3 bg-oxygen/10 border border-oxygen/20 rounded-xl flex items-start gap-3">
+                          <div className="p-1.5 bg-oxygen/20 rounded-md">
+                            <Zap className="w-4 h-4 text-oxygen" />
+                          </div>
+                          <div>
+                            <span className="text-xs font-semibold text-oxygen font-mono uppercase tracking-wider block mb-1">
+                              Action Executed: {msg.toolCall.name}
+                            </span>
+                            <div className="text-[11px] text-white/70 font-mono bg-black/40 p-2 rounded-md">
+                               <span className="text-white/50 block mb-1">// Parameters</span>
+                               {JSON.stringify(msg.toolCall.args, null, 2)}
+                            </div>
+                            <div className="text-[11px] text-emerald-400 font-mono mt-1">
+                               <span className="text-white/50">// Result</span> {msg.toolCall.result?.message || "Success"}
+                            </div>
+                            {msg.toolCall.result?.link && (
+                               <a href={msg.toolCall.result.link} target="_blank" rel="noopener noreferrer" className="mt-3 inline-block px-4 py-2 bg-[#25D366] text-white font-semibold text-xs rounded-lg shadow-[0_0_15px_rgba(37,211,102,0.3)] hover:bg-[#20BE5A] transition-colors">
+                                 Open WhatsApp
+                               </a>
+                            )}
+                          </div>
+                        </div>
+                      )}
                    </div>
                 ) : (
                   <div className="whitespace-pre-wrap">{msg.text}</div>

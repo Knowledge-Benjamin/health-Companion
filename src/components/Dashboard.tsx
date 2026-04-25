@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Line, LineChart, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, Area, AreaChart } from "recharts";
 import { Activity, Heart, Droplet, Zap, TrendingUp, RefreshCw, X, ChevronRight, CheckCircle2, Circle, AlertCircle } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "../lib/utils";
+import { ClientDatabase } from "../services/db";
 
 // Mock data to simulate predictive modeling
 const hrvData = [
@@ -78,6 +79,31 @@ export function Dashboard() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [selectedStat, setSelectedStat] = useState<any>(null);
 
+  const [metrics, setMetrics] = useState({
+    hrv: 50,
+    rhr: 62,
+    glucose: 110,
+    recovery: 78
+  });
+
+  const loadData = async () => {
+    setIsSyncing(true);
+    const latest = await ClientDatabase.get("telemetry", "latest");
+    if (latest) {
+      setMetrics({
+        hrv: latest.hrv || 50,
+        rhr: latest.rhr || 62,
+        glucose: latest.glucose || 110,
+        recovery: latest.readiness || 78
+      });
+    }
+    setIsSyncing(false);
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
   // Daily Protocol State
   const [waterGlasses, setWaterGlasses] = useState(3);
   const [directives, setDirectives] = useState([
@@ -92,8 +118,7 @@ export function Dashboard() {
   };
 
   const handleSync = () => {
-    setIsSyncing(true);
-    setTimeout(() => setIsSyncing(false), 2000);
+    loadData();
   };
 
   const handleStatClick = (statData: any) => {
@@ -128,10 +153,10 @@ export function Dashboard() {
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <StatCard title="Resting Heart Rate" value="62 bpm" icon={Heart} trend="Nominal" onClick={() => handleStatClick({ title: "Resting Heart Rate", value: "62 bpm", desc: "Your resting heart rate is perfectly aligned with your baseline average of 63 bpm over the last 30 days.", history: "Nominal" })} />
-        <StatCard title="Heart Rate Variability" value="50 ms" icon={Activity} trend="-15% (Dropping)" alert onClick={() => handleStatClick({ title: "HRV Alert", value: "50 ms", alert: true, desc: "Significant drop detected. Your baseline is 65ms. A 15% reduction correlates heavily with accumulating systemic stress or sleep deprivation.", history: "Critical Drop" })} />
-        <StatCard title="Blood Glucose Est." value="110 mg/dL" icon={Droplet} trend="+12%" onClick={() => handleStatClick({ title: "Blood Glucose Est.", value: "110 mg/dL", desc: "Slight post-prandial elevation within expected margins. Historical tracking shows excellent insulin sensitivity.", history: "Slight Rise" })} />
-        <StatCard title="Recovery Index" value="78 / 100" icon={Zap} trend="+2%" onClick={() => handleStatClick({ title: "Recovery Index", value: "78 / 100", desc: "Overall recovery is stable. Sleep structure remains somewhat compromised, but parasympathetic activity is compensating.", history: "Stable" })} />
+        <StatCard title="Resting Heart Rate" value={`${metrics.rhr} bpm`} icon={Heart} trend="Nominal" onClick={() => handleStatClick({ title: "Resting Heart Rate", value: `${metrics.rhr} bpm`, desc: "Your resting heart rate is perfectly aligned with your baseline average.", history: "Nominal" })} />
+        <StatCard title="Heart Rate Variability" value={`${metrics.hrv} ms`} icon={Activity} trend={metrics.hrv < 55 ? "-15% (Dropping)" : "Nominal"} alert={metrics.hrv < 55} onClick={() => handleStatClick({ title: "HRV Alert", value: `${metrics.hrv} ms`, alert: metrics.hrv < 55, desc: metrics.hrv < 55 ? "Significant drop detected. Your baseline is 65ms. A reduction correlates heavily with accumulating systemic stress or sleep deprivation." : "Your HRV is looking good relative to your baseline.", history: metrics.hrv < 55 ? "Critical Drop" : "Nominal" })} />
+        <StatCard title="Blood Glucose Est." value={`${metrics.glucose} mg/dL`} icon={Droplet} trend="+12%" onClick={() => handleStatClick({ title: "Blood Glucose Est.", value: `${metrics.glucose} mg/dL`, desc: "Slight post-prandial elevation within expected margins. Historical tracking shows excellent insulin sensitivity.", history: "Slight Rise" })} />
+        <StatCard title="Recovery Index" value={`${metrics.recovery} / 100`} icon={Zap} trend="+2%" onClick={() => handleStatClick({ title: "Recovery Index", value: `${metrics.recovery} / 100`, desc: "Overall recovery is stable. Sleep structure remains somewhat compromised, but parasympathetic activity is compensating.", history: "Stable" })} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 flex-1 min-h-[500px] mb-8">

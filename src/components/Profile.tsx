@@ -1,7 +1,8 @@
-import { User, Activity, Settings, Save, Shield, ShieldCheck, Database, FileKey, CheckCircle, AlertTriangle, Pill, Target, UploadCloud } from "lucide-react";
-import { useState } from "react";
-import { motion } from "motion/react";
+import { User, Activity, Settings, Save, Shield, ShieldCheck, Database, FileKey, CheckCircle, AlertTriangle, Pill, Target, UploadCloud, X, RefreshCw } from "lucide-react";
+import { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import { cn } from "../lib/utils";
+import { ClientDatabase } from "../services/db";
 
 export function Profile() {
   const [isEditing, setIsEditing] = useState(false);
@@ -22,6 +23,57 @@ export function Profile() {
 
   const [keyState, setKeyState] = useState<"idle" | "generating" | "done">("idle");
   const [purgeState, setPurgeState] = useState<"idle" | "confirm" | "purging" | "done">("idle");
+
+  const [aggregatorDevices, setAggregatorDevices] = useState<{id: string, name: string, connected: boolean}[]>([]);
+  const [showAggregatorModal, setShowAggregatorModal] = useState(false);
+  const [isAggregatorSyncing, setIsAggregatorSyncing] = useState(false);
+
+  useEffect(() => {
+    ClientDatabase.get("integrations", "aggregator").then((data) => {
+      if (data && data.devices) {
+        setAggregatorDevices(data.devices);
+      } else {
+        setAggregatorDevices([
+          { id: "apple_health", name: "Apple Health", connected: false },
+          { id: "oura", name: "Oura", connected: false },
+          { id: "fitbit", name: "Fitbit", connected: false },
+          { id: "garmin", name: "Garmin", connected: false },
+        ]);
+      }
+    });
+  }, []);
+
+  const handleConnectProvider = async (deviceId: string) => {
+    setIsAggregatorSyncing(true);
+    setTimeout(async () => {
+      const updated = aggregatorDevices.map(d => d.id === deviceId ? { ...d, connected: true } : d);
+      setAggregatorDevices(updated);
+      
+      await ClientDatabase.save("integrations", "aggregator", { devices: updated });
+
+      // Simulate webhook populating data into our local DB
+      await ClientDatabase.save("telemetry", "latest", {
+        hrv: 68,
+        sleepHours: 7.5,
+        readiness: 92,
+        glucose: 105,
+        lastSync: new Date().toISOString()
+      });
+
+      // Provide historical data as well for charts
+      await ClientDatabase.save("telemetry", "history", {
+        hrv: [
+          { day: "Mon", value: 65 },
+          { day: "Tue", value: 62 },
+          { day: "Wed", value: 58 },
+          { day: "Thu", value: 55 },
+          { day: "Fri", value: 68 },
+        ]
+      });
+
+      setIsAggregatorSyncing(false);
+    }, 2000);
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -265,7 +317,7 @@ export function Profile() {
                    Launch the unified portal to securely authenticate with Apple Health, Garmin, Oura, Fitbit, and 50+ other providers. 
                  </p>
                  <button 
-                  onClick={() => alert("In a production environment, this would open the Terra API or Vital SDK widget (which offer free developer tiers) to authenticate various providers.")}
+                  onClick={() => setShowAggregatorModal(true)}
                   className="px-6 py-2.5 bg-oxygen text-white rounded-xl text-sm font-semibold hover:bg-oxygen/80 transition-colors shadow-[0_0_15px_rgba(0,122,255,0.3)] relative z-10"
                  >
                    Launch Integration Portal
@@ -358,6 +410,71 @@ export function Profile() {
           </div>
         </div>
       </div>
+
+      {/* Aggregator Modal (Simulating Terra/Vital SDK) */}
+      <AnimatePresence>
+        {showAggregatorModal && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-deep-space/90 backdrop-blur-sm"
+          >
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              className="glass-panel w-full max-w-sm rounded-[24px] flex flex-col overflow-hidden border-white/10 shadow-2xl bg-[#09090b]"
+            >
+              <div className="flex items-center justify-between p-5 border-b border-white/5">
+                <div className="flex items-center gap-2">
+                  <Activity className="w-5 h-5 text-oxygen" />
+                  <h3 className="font-semibold text-white">Aggregator Portal</h3>
+                </div>
+                <button 
+                  onClick={() => setShowAggregatorModal(false)}
+                  disabled={isAggregatorSyncing}
+                  className="p-2 rounded-full hover:bg-white/10 transition-colors disabled:opacity-50 text-white/50 hover:text-white"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-6">
+                <p className="text-sm text-white/60 mb-6 text-center">
+                  Select a provider to authenticate. We use secure OAuth to pull your health telemetry.
+                </p>
+
+                <div className="space-y-3">
+                  {aggregatorDevices.map((device) => (
+                    <button
+                      key={device.id}
+                      onClick={() => !device.connected && handleConnectProvider(device.id)}
+                      disabled={device.connected || isAggregatorSyncing}
+                      className={cn(
+                        "w-full flex items-center justify-between p-4 rounded-xl border transition-all text-left",
+                        device.connected 
+                          ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 cursor-default" 
+                          : "bg-white/5 border-white/10 hover:border-oxygen/50 hover:bg-white/10 text-white"
+                      )}
+                    >
+                      <span className="font-medium text-sm">{device.name}</span>
+                      {device.connected ? (
+                        <CheckCircle className="w-4 h-4" />
+                      ) : isAggregatorSyncing ? (
+                        <RefreshCw className="w-4 h-4 animate-spin opacity-50" />
+                      ) : (
+                        <span className="text-xs uppercase tracking-wider opacity-60">Connect</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
     </div>
   );
 }
