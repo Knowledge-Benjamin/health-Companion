@@ -1,7 +1,7 @@
-import { Activity, MessageSquare, ShieldAlert, UploadCloud } from "lucide-react";
+import { Activity, MessageSquare, ShieldAlert, UploadCloud, User } from "lucide-react";
 import { cn } from "../lib/utils";
 
-export type Tab = "dashboard" | "chat" | "vault" | "guardian";
+export type Tab = "dashboard" | "chat" | "vault" | "guardian" | "profile";
 
 interface SidebarProps {
   activeTab: Tab;
@@ -14,6 +14,7 @@ export function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
     { id: "vault", label: "Smart Vault", icon: UploadCloud },
     { id: "chat", label: "Oracle", icon: MessageSquare },
     { id: "guardian", label: "Guardian", icon: ShieldAlert },
+    { id: "profile", label: "Profile", icon: User },
   ] as const;
 
   return (

@@ -5,6 +5,7 @@ import { Dashboard } from "./components/Dashboard";
 import { Chat } from "./components/Chat";
 import { Vault } from "./components/Vault";
 import { Guardian } from "./components/Guardian";
+import { Profile } from "./components/Profile";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>("dashboard");
@@ -29,6 +30,7 @@ export default function App() {
             {activeTab === "chat" && <Chat />}
             {activeTab === "vault" && <Vault />}
             {activeTab === "guardian" && <Guardian />}
+            {activeTab === "profile" && <Profile />}
           </motion.div>
         </AnimatePresence>
       </main>

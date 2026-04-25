@@ -11,6 +11,14 @@
   --color-deep-space: #0A0A0B;
   --color-panel: #141416;
   --color-panel-border: rgba(255, 255, 255, 0.08);
+
+  --animate-shake: shake 0.5s ease-in-out;
+
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20%, 60% { transform: translateX(-5px); }
+    40%, 80% { transform: translateX(5px); }
+  }
 }
 
 body {
