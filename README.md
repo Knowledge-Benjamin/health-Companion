@@ -33,7 +33,20 @@ The platform is designed to support a multi-tiered subscription model supplement
 - **Enterprise / Clinical B2B Tier:** White-labeled solutions for concierge medicine practices or telemetry management for remote patient monitoring. Clinical staff can securely tap into patient-authorized data streams.
 - **Hardware Integration:** Potential up-sells via native partnerships and proprietary wearable API bridges for high-fidelity continuous sampling (e.g., continuous glucose monitors, specialized smart rings).
 
-## Security & Architecture Considerations
+## Technical Architecture & Data Strategy
+
+### 1. Hardware Integration Strategy (The Aggregator Route)
+To connect with diverse wearables (Apple Health, Oura, Whoop, Garmin, Dexcom), Sentinel utilizes the **Aggregator API Route** (e.g., [Vital API](https://tryvital.io/) or [Terra API](https://tryterra.co/)).
+- **Why Aggregators?** Rather than building individual OAuth clients and disparate parsing logic for 50+ wearable brands, aggregators provide a single, unified REST API and standardized data schema. Both Vital and Terra offer generous free developer/startup tiers.
+- **Implementation Flow:** Sentinel embeds the aggregator's lightweight Web/SDK Link widget. The user authenticates their provider (e.g., Fitbit) through this widget. The aggregator then streams standardized webhooks (sleep, activity, vitals) directly to our backend.
+- **Apple HealthKit Edge Case:** Since web browsers cannot natively access the local iOS SQLite HealthKit database, we deploy a lightweight, "invisible" iOS companion app bundled with the aggregator's iOS SDK to sync background data directly to our cloud, or rely on user-curated XML/ZIP exports via the Web platform.
+
+### 2. On-Device Storage (LiteSQL / IndexedDB)
+Sentinel heavily prioritizes speed, offline capabilities, and privacy via localized data storage. 
+- **Technology:** We utilize robust on-device persistent memory (IndexedDB/WebSQL powered by `localforage`, mimicking a lightweight SQLite interaction).
+- **Features:** Intelligent caching, deterministic UUID generation for entities, and local contextual history for the AI Oracle. This ensures that even in sub-optimal network conditions or strict privacy modes, the user retains access to critical metrics and RAG chat history.
+
+## Security & UI Considerations
 - **Environment:** Front-end built with robust React + Vite ecosystem, styled utilizing Tailwind CSS with a professional dark mode "tech-forward" aesthetic.
 - **State Management & UI:** Complex fluid transitions powered by framer-motion to enhance perceived performance and tactical feel.
 - **Data Privacy:** Architecture leans heavily toward client-side encryption paradigms and zero-trust cloud interactions to maximize user privacy overhead.

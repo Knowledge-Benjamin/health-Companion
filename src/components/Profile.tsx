@@ -1,4 +1,4 @@
-import { User, Activity, Settings, Save, Shield, ShieldCheck, Database, FileKey, CheckCircle, AlertTriangle, Pill, Target } from "lucide-react";
+import { User, Activity, Settings, Save, Shield, ShieldCheck, Database, FileKey, CheckCircle, AlertTriangle, Pill, Target, UploadCloud } from "lucide-react";
 import { useState } from "react";
 import { motion } from "motion/react";
 import { cn } from "../lib/utils";
@@ -248,49 +248,52 @@ export function Profile() {
 
           <div className="glass-panel p-6 rounded-2xl">
             <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
-              <Activity className="w-5 h-5 text-oxygen" /> Device Integrations
+              <Activity className="w-5 h-5 text-oxygen" /> Device Integrations (Aggregator)
             </h3>
-            <p className="text-sm text-white/60 mb-6">Connect smart health devices and wearables for continuous real-time telemetry syncing.</p>
+            <p className="text-sm text-white/60 mb-6">
+              Connect your wearables using a unified aggregator (like Terra API or Vital). This allows seamless syncing with Apple Health, Oura, Whoop, and more via a single integration.
+            </p>
             
             <div className="space-y-4">
-              {[
-                { id: "apple", name: "Apple HealthKit / Watch", status: "Connect", icon: "Watch", active: false, type: "native" },
-                { id: "oura", name: "Oura Ring API", status: "Connect", icon: "Ring", active: false, type: "oauth" },
-                { id: "whoop", name: "Whoop Strap", status: "Connect", icon: "Activity", active: false, type: "oauth" },
-                { id: "dexcom", name: "Dexcom G7 CGM", status: "Connect", icon: "HeartPulse", active: false, type: "oauth" },
-              ].map((device, idx) => (
-                <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-[#141416] border border-panel-border rounded-xl gap-4 hover:border-white/10 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center shrink-0">
-                      <Activity className={cn("w-5 h-5", device.active ? "text-oxygen" : "text-white/40")} />
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-semibold text-white">{device.name}</h4>
-                      {device.active ? (
-                        <p className="text-xs text-oxygen flex items-center gap-1 mt-0.5"><CheckCircle className="w-3 h-3" /> Last sync: {device.lastSync}</p>
-                      ) : (
-                         <p className="text-xs text-white/40 mt-0.5">Not connected</p>
-                      )}
-                    </div>
-                  </div>
-                  <button 
-                    onClick={() => {
-                      if (device.type === 'native') {
-                        alert("Note: Direct Apple HealthKit integration requires a native iOS companion app, as web browsers cannot natively access HealthKit databases. To implement this in production, we would use an aggregator API like Terra API/Vital, or build an iOS app that syncs to your backend. We can build an XML export updater here if you'd like!");
-                      } else {
-                        alert(`Initiating OAuth connection flow for ${device.name}...`);
-                      }
-                    }}
-                    className={cn(
-                    "px-4 py-2 rounded-lg text-xs font-semibold w-full sm:w-auto transition-colors",
-                    device.active 
-                      ? "bg-white/5 text-white/70 hover:bg-white/10 border border-transparent" 
-                      : "bg-[#141416] text-white hover:text-oxygen border border-panel-border hover:border-oxygen/50"
-                  )}>
-                    {device.status}
-                  </button>
-                </div>
-              ))}
+               {/* Aggregator Widget Simulation */}
+               <div className="p-5 bg-gradient-to-r from-oxygen/10 to-transparent border border-oxygen/20 rounded-xl relative overflow-hidden">
+                 <div className="absolute top-0 right-0 p-4 opacity-10">
+                   <Activity className="w-24 h-24" />
+                 </div>
+                 <h4 className="font-semibold text-oxygen mb-2 relative z-10">Connect Health Aggregator</h4>
+                 <p className="text-sm text-white/70 mb-4 max-w-[80%] relative z-10">
+                   Launch the unified portal to securely authenticate with Apple Health, Garmin, Oura, Fitbit, and 50+ other providers. 
+                 </p>
+                 <button 
+                  onClick={() => alert("In a production environment, this would open the Terra API or Vital SDK widget (which offer free developer tiers) to authenticate various providers.")}
+                  className="px-6 py-2.5 bg-oxygen text-white rounded-xl text-sm font-semibold hover:bg-oxygen/80 transition-colors shadow-[0_0_15px_rgba(0,122,255,0.3)] relative z-10"
+                 >
+                   Launch Integration Portal
+                 </button>
+               </div>
+
+               {/* Apple Health Manual Export Fallback */}
+               <div className="mt-8 pt-6 border-t border-panel-border">
+                  <h4 className="font-medium text-sm text-white mb-2">Apple Health Manual Sync (Fallback)</h4>
+                  <p className="text-xs text-white/50 mb-4">
+                    For complete privacy or if you prefer not to use an aggregator API, you can export your Apple Health data as a ZIP/XML file directly from your iPhone and upload it here.
+                  </p>
+                  <label className="flex items-center justify-center w-full p-4 border border-dashed border-panel-border rounded-xl cursor-pointer hover:bg-white/5 hover:border-white/20 transition-colors">
+                     <span className="text-sm text-white/60 font-semibold flex items-center gap-2">
+                        <UploadCloud className="w-4 h-4" /> Upload export.zip
+                     </span>
+                     <input 
+                       type="file" 
+                       className="hidden" 
+                       accept=".zip,.xml"
+                       onChange={(e) => {
+                         if (e.target.files?.length) {
+                           alert(`Simulating parsing of ${e.target.files[0].name}... We would extract step counts, HR, and sleep data locally.`);
+                         }
+                       }} 
+                     />
+                  </label>
+               </div>
             </div>
           </div>
 
